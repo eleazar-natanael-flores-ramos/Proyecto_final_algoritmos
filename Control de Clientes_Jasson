@@ -1,0 +1,306 @@
+#--- Función 1: Control de inventario ---#
+
+
+
+
+
+
+#--- Función 2: Control de clientes ---#
+import tkinter as tk
+from tkinter import ttk, messagebox
+import pandas as pd
+import os
+
+CLIENTES_FILE = 'clientes.csv'
+"""Nombre del archivo CSV utilizado para almacenar los datos de clientes."""
+
+def cargar_clientes():
+    """
+    Carga los datos de clientes desde el archivo CSV.
+
+    Si el archivo no existe o está vacío, devuelve un DataFrame vacío
+    con las columnas esperadas. Asegura que la columna 'Código' se lea como string.
+
+    Returns:
+        pd.DataFrame: DataFrame de Pandas con los datos de clientes.
+    """
+    if os.path.exists(CLIENTES_FILE):
+        try:
+            # Asegura que el código se lea como string para evitar problemas de formato
+            df = pd.read_csv(CLIENTES_FILE, dtype={'Código': str})
+            return df
+        except pd.errors.EmptyDataError:
+            # Devuelve un DF vacío si el archivo existe pero está vacío
+            return pd.DataFrame(columns=['Código', 'Nombre', 'Dirección'])
+    else:
+        # Devuelve un DF vacío si el archivo no existe
+        return pd.DataFrame(columns=['Código', 'Nombre', 'Dirección'])
+
+def guardar_clientes(df):
+    """
+    Guarda el DataFrame de clientes en el archivo CSV.
+
+    Args:
+        df (pd.DataFrame): El DataFrame que contiene los datos de clientes.
+    """
+    df.to_csv(CLIENTES_FILE, index=False)
+
+def crear_cliente_logica(codigo, nombre, direccion):
+    """
+    Implementa la lógica de CREAR (adicionar) un nuevo cliente.
+
+    Realiza validaciones de campos y unicidad del código.
+
+    Args:
+        codigo (str): El código único del cliente.
+        nombre (str): El nombre del cliente.
+        direccion (str): La dirección del cliente.
+
+    Returns:
+        tuple[bool, str]: Un booleano indicando el éxito y un mensaje de estado.
+    """
+    df_clientes = cargar_clientes()
+
+    if not all([codigo, nombre, direccion]):
+        return False, "Error: Todos los campos son obligatorios."
+    
+    # Comprueba si el código ya existe
+    if codigo in df_clientes['Código'].values:
+        return False, f"Error: El código '{codigo}' ya existe."
+    
+    # Creación
+    nuevo_cliente = pd.DataFrame({'Código': [codigo], 'Nombre': [nombre], 'Dirección': [direccion]})
+    df_clientes = pd.concat([df_clientes, nuevo_cliente], ignore_index=True)
+    guardar_clientes(df_clientes)
+    
+    return True, "Cliente creado exitosamente."
+
+def actualizar_cliente_logica(codigo, nuevo_nombre, nueva_direccion):
+    """
+    Implementa la lógica de EDITAR/ACTUALIZAR un cliente existente.
+
+    Busca el cliente por su código y actualiza sus datos.
+
+    Args:
+        codigo (str): El código del cliente a actualizar.
+        nuevo_nombre (str): El nuevo nombre.
+        nueva_direccion (str): La nueva dirección.
+
+    Returns:
+        tuple[bool, str]: Un booleano indicando el éxito y un mensaje de estado.
+    """
+    df_clientes = cargar_clientes()
+    
+    # Encuentra el índice (o índices) del cliente usando el código
+    idx = df_clientes[df_clientes['Código'] == codigo].index
+    
+    if idx.empty:
+        return False, "Error: Cliente no encontrado para actualizar."
+    
+    # Actualización in-place
+    df_clientes.loc[idx, 'Nombre'] = nuevo_nombre
+    df_clientes.loc[idx, 'Dirección'] = nueva_direccion
+    guardar_clientes(df_clientes)
+    
+    return True, "Cliente actualizado exitosamente."
+
+def eliminar_cliente_logica(codigo):
+    """
+    Implementa la lógica de ELIMINAR un cliente.
+
+    Filtra el DataFrame para excluir el registro con el código proporcionado.
+
+    Args:
+        codigo (str): El código del cliente a eliminar.
+
+    Returns:
+        tuple[bool, str]: Un booleano indicando el éxito y un mensaje de estado.
+    """
+    df_clientes = cargar_clientes()
+    
+    # Filtra el DataFrame, manteniendo solo las filas cuyo código es diferente
+    df_actualizado = df_clientes[df_clientes['Código'] != codigo]
+    
+    # Comprueba si la longitud cambió (si no cambió, significa que no se encontró el código)
+    if len(df_actualizado) == len(df_clientes):
+        return False, "Error: Cliente no encontrado para eliminar."
+    
+    # Eliminación y guardado
+    guardar_clientes(df_actualizado)
+    
+    return True, "Cliente eliminado exitosamente."
+
+
+# --- 2. INTERFAZ GRÁFICA (TKINTER) ---
+
+class ClienteApp:
+    """Clase principal que gestiona la interfaz gráfica y la interacción con la lógica de datos."""
+    def __init__(self, master):
+        """Inicializa la aplicación y configura la ventana principal."""
+        self.master = master
+        master.title("Control de Clientes")
+
+        # Variables de entrada vinculadas a los Entry widgets
+        self.codigo = tk.StringVar()
+        self.nombre = tk.StringVar()
+        self.direccion = tk.StringVar()
+
+        self.crear_widgets()
+        self.cargar_lista_clientes() # Muestra los datos iniciales
+
+    def crear_widgets(self):
+        """Define y coloca todos los componentes (widgets) de la ventana."""
+        
+        # Frame de Entrada (CRUD)
+        frame_input = ttk.LabelFrame(self.master, text="Gestión de Cliente", padding="10")
+        frame_input.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
+
+        # Campos de entrada
+        ttk.Label(frame_input, text="Código:").grid(row=0, column=0, sticky="w", pady=2)
+        ttk.Entry(frame_input, textvariable=self.codigo).grid(row=0, column=1, padx=5, pady=2)
+        
+        ttk.Label(frame_input, text="Nombre:").grid(row=1, column=0, sticky="w", pady=2)
+        ttk.Entry(frame_input, textvariable=self.nombre).grid(row=1, column=1, padx=5, pady=2)
+        
+        ttk.Label(frame_input, text="Dirección:").grid(row=2, column=0, sticky="w", pady=2)
+        ttk.Entry(frame_input, textvariable=self.direccion).grid(row=2, column=1, padx=5, pady=2)
+
+        # Frame de Botones
+        frame_btns = ttk.Frame(frame_input)
+        frame_btns.grid(row=3, column=0, columnspan=2, pady=10)
+        
+        ttk.Button(frame_btns, text="Crear", command=self.ejecutar_crear).grid(row=0, column=0, padx=5)
+        ttk.Button(frame_btns, text="Actualizar", command=self.ejecutar_actualizar).grid(row=0, column=1, padx=5)
+        ttk.Button(frame_btns, text="Eliminar", command=self.ejecutar_eliminar).grid(row=0, column=2, padx=5)
+
+        # Frame de la Lista (Treeview)
+        frame_lista = ttk.LabelFrame(self.master, text="Lista de Clientes", padding="10")
+        frame_lista.grid(row=1, column=0, padx=10, pady=10, sticky="nsew") # sticky="nsew" para expandir
+
+        # Definición del Treeview (Listar Clientes)
+        self.lista_clientes = ttk.Treeview(frame_lista, columns=('Código', 'Nombre', 'Dirección'), show='headings')
+        self.lista_clientes.heading('Código', text='Código')
+        self.lista_clientes.heading('Nombre', text='Nombre')
+        self.lista_clientes.heading('Dirección', text='Dirección')
+        
+        self.lista_clientes.column('Código', width=70)
+        self.lista_clientes.column('Nombre', width=150)
+        self.lista_clientes.column('Dirección', width=200)
+
+        self.lista_clientes.grid(row=0, column=0, sticky="nsew")
+        
+        # Evento para cargar datos en los campos al seleccionar una fila
+        self.lista_clientes.bind('<<TreeviewSelect>>', self.cargar_cliente_seleccionado)
+        
+        # Configuración para que el Treeview se expanda al cambiar el tamaño de la ventana
+        frame_lista.grid_columnconfigure(0, weight=1)
+        frame_lista.grid_rowconfigure(0, weight=1)
+        self.master.grid_columnconfigure(0, weight=1)
+
+    def limpiar_campos(self):
+        """Resetea los campos de entrada a cadenas vacías."""
+        self.codigo.set("")
+        self.nombre.set("")
+        self.direccion.set("")
+
+    def cargar_cliente_seleccionado(self, event):
+        """
+        Maneja el evento de selección en el Treeview.
+
+        Carga los datos de la fila seleccionada en los campos de entrada (Entry).
+
+        Args:
+            event: El evento de selección de Tkinter (no se utiliza directamente).
+        """
+        seleccion = self.lista_clientes.selection()
+        if seleccion:
+            # item(seleccion[0], 'values') devuelve una tupla con los valores de la fila
+            valores = self.lista_clientes.item(seleccion[0], 'values')
+            self.codigo.set(valores[0])
+            self.nombre.set(valores[1])
+            self.direccion.set(valores[2])
+
+    def cargar_lista_clientes(self):
+        """
+        Actualiza el Treeview con los datos actuales cargados desde el archivo CSV.
+        Implementa la funcionalidad de 'Leer' (Read).
+        """
+        # Limpia la lista existente
+        for item in self.lista_clientes.get_children():
+            self.lista_clientes.delete(item)
+            
+        df = cargar_clientes()
+        
+        # Itera sobre el DataFrame y añade las filas al Treeview
+        for index, row in df.iterrows():
+            # row.tolist() convierte la fila de Pandas a una lista para el Treeview
+            self.lista_clientes.insert('', tk.END, values=row.tolist())
+
+    # --- Funciones de Botones (Ejecución de Algoritmos) ---
+
+    def ejecutar_crear(self):
+        """Recupera los datos y llama a la función de lógica para crear un cliente."""
+        cod = self.codigo.get()
+        nom = self.nombre.get()
+        dir = self.direccion.get()
+        
+        exito, mensaje = crear_cliente_logica(cod, nom, dir)
+        
+        if exito:
+            messagebox.showinfo("Éxito", mensaje)
+            self.limpiar_campos()
+            self.cargar_lista_clientes() # Actualiza la lista
+        else:
+            messagebox.showerror("Fallo", mensaje)
+
+    def ejecutar_actualizar(self):
+        """Recupera los datos y llama a la función de lógica para actualizar un cliente."""
+        cod = self.codigo.get()
+        nom = self.nombre.get()
+        dir = self.direccion.get()
+        
+        exito, mensaje = actualizar_cliente_logica(cod, nom, dir)
+        
+        if exito:
+            messagebox.showinfo("Éxito", mensaje)
+            self.limpiar_campos()
+            self.cargar_lista_clientes() # Actualiza la lista
+        else:
+            messagebox.showerror("Fallo", mensaje)
+
+    def ejecutar_eliminar(self):
+        """Recupera el código y llama a la función de lógica para eliminar un cliente, pidiendo confirmación."""
+        cod = self.codigo.get()
+        if not cod:
+            messagebox.showerror("Fallo", "Seleccione un cliente de la lista o ingrese un código para eliminar.")
+            return
+
+        # Pide confirmación al usuario antes de eliminar
+        respuesta = messagebox.askyesno("Confirmar Eliminación", f"¿Está seguro de eliminar el cliente con código {cod}?")
+        
+        if respuesta:
+            exito, mensaje = eliminar_cliente_logica(cod)
+            
+            if exito:
+                messagebox.showinfo("Éxito", mensaje)
+                self.limpiar_campos()
+                self.cargar_lista_clientes() # Actualiza la lista
+            else:
+                messagebox.showerror("Fallo", mensaje)
+
+
+if __name__ == '__main__':
+    # Bloque de ejecución principal
+    root = tk.Tk()
+    app = ClienteApp(root)
+    root.mainloop()
+
+    #--- Función 3: Control de ventas ---#
+
+
+
+
+
+
+
+    #--- Función 4: Reporte de Ventas ---#
